@@ -1,4 +1,3 @@
-```yaml
 name: numerical_pde
 channels:
   - conda-forge
@@ -9,4 +8,3 @@ dependencies:
   - matplotlib
   - notebook
   - ipykernel
-```
