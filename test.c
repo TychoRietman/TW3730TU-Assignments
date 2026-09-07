@@ -1,29 +1,19 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
 
-int main(void) {
-    int numbers[10];
-    int largest;
-
-    srand(time(NULL));
-
-    printf("Random numbers:\n");
-
-    for (int i = 0; i < 10; i++) {
-        numbers[i] = rand() % 100 + 1;
-        printf("%d ", numbers[i]);
-    }
-
-    largest = numbers[0];
-
-    for (int i = 1; i < 10; i++) {
-        if (numbers[i] > largest) {
-            largest = numbers[i];
-        }
-    }
-
-    printf("\n\nLargest number: %d\n", largest);
-
-    return 0;
+double cube(double x)
+{
+    return x*x*x;
 }
+
+
+
+
+int main(void)
+{
+    double x[5] = {1.0, 2.0, 3.0, 4.0, 5.0};
+
+    printf("The value of x[2] is: %f\n", x[2]);
+    printf("The cube of x[2] is: %f\n", cube(x[2]));
+
+}
+
