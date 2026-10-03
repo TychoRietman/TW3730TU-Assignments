@@ -1,69 +1,66 @@
-import os
-import random
-import time
-from concurrent.futures import ProcessPoolExecutor
+"""
+2D multivariate spline over a triangulated grid (Delaunay + Clough-Tocher).
 
+Clough-Tocher is a C1-continuous piecewise-cubic interpolant: each Delaunay
+triangle is split into 3 sub-triangles with cubic Bezier patches, with
+gradients estimated from the data so adjacent triangles join smoothly.
+"""
+import numpy as np
+import matplotlib          # remove this line to get an interactive window
+import matplotlib.pyplot as plt
+import matplotlib.tri as mtri
+from scipy.spatial import Delaunay
+from scipy.interpolate import CloughTocher2DInterpolator
 
-def run_chunk(number_of_points):
-    """Generate random points and count how many fall inside a unit circle."""
-    inside_circle = 0
+# ---------------- data (angle [deg], x2, value) ----------------
+data = np.array([
+    [ 0, 0.3, -0.0010],
+    [ 0, 0.6, -0.0012],
+    [ 0, 0.9, -0.0015],
+    [10, 0.3, -0.0021],
+    [10, 0.6, -0.0024],
+    [10, 0.9, -0.0028],
+    [20, 0.3, -0.0030],
+    [20, 0.6, -0.0034],
+    [20, 0.9, -0.0039],
+])
+pts, z = data[:, :2], data[:, 2]
 
-    for _ in range(number_of_points):
-        x = random.random()
-        y = random.random()
+# ---------------- triangulation + spline ----------------
+tri = Delaunay(pts)
+spline = CloughTocher2DInterpolator(tri, z)
 
-        if x * x + y * y <= 1.0:
-            inside_circle += 1
+# evaluate on a fine grid
+A, B = np.meshgrid(np.linspace(0, 20, 120), np.linspace(0.3, 0.9, 120))
+Z = spline(A, B)
 
-    return inside_circle
+# example query
+print("spline(15 deg, 0.45) =", float(spline(15, 0.45)))
 
+# ---------------- 3D visualization ----------------
+fig = plt.figure(figsize=(13, 6))
 
-def main():
-    # Number of CPU cores allocated by Slurm.
-    # If not running through Slurm, use 1 core.
-    workers = int(os.environ.get("SLURM_CPUS_PER_TASK", 1))
+# (left) smooth spline surface + data points + triangle edges on the data
+ax = fig.add_subplot(1, 2, 1, projection="3d")
+surf = ax.plot_surface(A, B, Z, cmap="viridis", alpha=0.85, linewidth=0, antialiased=True)
+ax.scatter(pts[:, 0], pts[:, 1], z, c="red", s=50, depthshade=False, label="data")
+ax.plot_trisurf(mtri.Triangulation(pts[:, 0], pts[:, 1], tri.simplices), z,
+                color="none", edgecolor="k", linewidth=0.8)
+ax.set_xlabel("Angle (deg)"); ax.set_ylabel("Parameter"); ax.set_zlabel("Value")
+ax.set_title("Clough-Tocher C1 spline surface")
+ax.view_init(elev=25, azim=-130)
+ax.legend()
+fig.colorbar(surf, ax=ax, shrink=0.6, pad=0.1)
 
-    # Total amount of computation
-    total_points = 200_000_000
+# (right) the underlying linear triangle mesh for comparison
+ax2 = fig.add_subplot(1, 2, 2, projection="3d")
+ax2.plot_trisurf(mtri.Triangulation(pts[:, 0], pts[:, 1], tri.simplices), z,
+                 cmap="viridis", edgecolor="k", linewidth=0.8)
+ax2.scatter(pts[:, 0], pts[:, 1], z, c="red", s=50, depthshade=False)
+ax2.set_xlabel("Angle (deg)"); ax2.set_ylabel("Parameter"); ax2.set_zlabel("Value")
+ax2.set_title("Delaunay triangles (linear)")
+ax2.view_init(elev=25, azim=-130)
 
-    points_per_worker = total_points // workers
-
-    print("==========================================")
-    print("Parallel Monte Carlo simulation")
-    print("==========================================")
-    print(f"CPU cores:        {workers}")
-    print(f"Total points:     {total_points:,}")
-    print(f"Points per core:  {points_per_worker:,}")
-    print("==========================================")
-
-    start_time = time.perf_counter()
-
-    # Each process gets an independent part of the calculation
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-
-        jobs = [
-            executor.submit(run_chunk, points_per_worker)
-            for _ in range(workers)
-        ]
-
-        total_inside = sum(job.result() for job in jobs)
-
-    actual_points = points_per_worker * workers
-
-    pi_estimate = 4.0 * total_inside / actual_points
-
-    runtime = time.perf_counter() - start_time
-
-    print()
-    print("==========================================")
-    print("RESULT")
-    print("==========================================")
-    print(f"Estimated pi: {pi_estimate:.10f}")
-    print(f"Actual pi:    3.1415926536")
-    print(f"Error:        {abs(pi_estimate - 3.1415926536):.10f}")
-    print(f"Runtime:      {runtime:.3f} seconds")
-    print("==========================================")
-
-
-if __name__ == "__main__":
-    main()
+plt.tight_layout()
+plt.savefig("spline_triangles.png", dpi=150)
+plt.show()
